@@ -129,6 +129,8 @@ void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT *create
     (*createInfo).messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     (*createInfo).pfnUserCallback = debugCallback;
     (*createInfo).pUserData = NULL;
+    (*createInfo).pNext = NULL;
+    (*createInfo).flags = 0;
 }
 
 void app_SetupDebugMessenger(AppHelloTriangle *app) {
