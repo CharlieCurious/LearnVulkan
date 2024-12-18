@@ -54,6 +54,7 @@ typedef struct AppHelloTriangle {
     GLFWwindow *window;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
+    VkPhysicalDevice physicalDevice;
 } AppHelloTriangle;
 
 bool checkValidationSupport() {
@@ -224,9 +225,38 @@ void app_CreateVkInstance(AppHelloTriangle *app) {
     }
 }
 
+bool isDeviceSuitable(VkPhysicalDevice device) {
+    return true;
+}
+
+void app_PickPhysicalDevide(AppHelloTriangle *app) {
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(app->instance, &deviceCount, NULL); 
+    if (deviceCount == 0) {
+        perror("Failed to find GPUs with Vulkan support!");
+        exit(EXIT_FAILURE);
+    }
+
+    VkPhysicalDevice devices[deviceCount];
+    vkEnumeratePhysicalDevices(app->instance, &deviceCount, devices);
+
+    for (uint32_t i = 0; i < deviceCount; i++) {
+        if (isDeviceSuitable(devices[i])) {
+            app->physicalDevice = devices[i];
+            break;
+        }
+    }
+
+    if (app->physicalDevice == VK_NULL_HANDLE) {
+        perror("Failed to find a suitable GPU");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void app_InitVulkan(AppHelloTriangle *app) {
     app_CreateVkInstance(app);
     app_SetupDebugMessenger(app);
+    app_PickPhysicalDevide(app);
 }
 
 void app_MainLoop(AppHelloTriangle *app) {
