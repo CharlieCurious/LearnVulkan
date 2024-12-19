@@ -1,4 +1,5 @@
 #include "vk_instance.h"
+#include "validation_layers.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +25,17 @@ void app_CreateVkInstance(App *app) {
     createInfo.ppEnabledExtensionNames = extensions;
 
     // Validation Layers
-    createInfo.enabledLayerCount = 0;
-    createInfo.pNext = NULL;
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {0};
+    if (enableValidationLayers) {
+        createInfo.enabledLayerCount = (uint32_t)VALIDATION_LAYERS_COUNT;
+        createInfo.ppEnabledLayerNames = validationLayers();
+
+        vkDebugMessengerCreateInfo_Populate(&debugCreateInfo);
+        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
+    } else {
+        createInfo.enabledLayerCount = 0;
+        createInfo.pNext = NULL;
+    }
 
     if (vkCreateInstance(&createInfo, NULL, &app->instance) != VK_SUCCESS) {
         perror("Failed to create VkInstance");
@@ -34,6 +44,15 @@ void app_CreateVkInstance(App *app) {
 }
 
 void app_SetupDebugMessenger(App *app) {
+    if (!enableValidationLayers) return;
+
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = {0};
+    vkDebugMessengerCreateInfo_Populate(&createInfo);
+
+    if (vkDebugUtilsMessengerEXT_Create(app->instance, &createInfo, NULL, &app->debugMessenger) != VK_SUCCESS) {
+        perror("Failed to create DebugUtilsMessengerEXT");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void app_PickPhysicalDevice(App *app) {
@@ -57,6 +76,18 @@ static const char **getRequiredExtensions(uint32_t *extensionCount) {
 
     for (uint32_t i = 0; i < glfwExtensionCount; i++) {
         extensions[i] = glfwExtensions[i];
+    }
+
+    if (enableValidationLayers) {
+        const char **new_extensions = (const char **)realloc(extensions, (glfwExtensionCount + 1) *sizeof(const char *));
+        if (!new_extensions) {
+            perror("malloc fail: getRequiredExtensions");
+            free(extensions);
+            exit(EXIT_FAILURE);
+        }
+        extensions = new_extensions;
+        extensions[glfwExtensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+        (*extensionCount)++;
     }
 
     return extensions;

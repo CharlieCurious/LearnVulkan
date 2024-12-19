@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2 -g
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
-SRCS = main.c vk_instance.c app.c
+SRCS = main.c vk_instance.c validation_layers.c app.c
 OBJS = $(SRCS:%.c=bin/%.o)
 TARGET = bin/VulkanTest
 

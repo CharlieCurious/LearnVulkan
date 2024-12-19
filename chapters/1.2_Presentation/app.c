@@ -1,4 +1,5 @@
 #include "app.h"
+#include "validation_layers.h"
 #include "vk_instance.h"
 
 #include <stdint.h>
@@ -44,6 +45,9 @@ void app_Cleanup(App *app) {
         return;
 
     if (app->instance) {
+        if (enableValidationLayers) {
+           vkDebugUtilsMessengerEXT_Destroy(app->instance, app->debugMessenger, NULL); 
+        }
         vkDestroyInstance(app->instance, NULL);
     }
 
