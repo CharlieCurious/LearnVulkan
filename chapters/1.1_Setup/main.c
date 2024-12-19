@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "utils.h"
 #include <vulkan/vulkan_core.h>
 
 #define GLFW_INCLUDE_VULKAN
@@ -50,11 +51,21 @@ typedef enum APP_Result {
     APP_ERROR,
 } APP_Result;
 
+struct QueueFamilyIndicies {
+    OptionalUint32 graphicsFamily;
+};
+
+bool queueFamilyIndiciesIsComplete(struct QueueFamilyIndicies indicies) {
+    return indicies.graphicsFamily.hasValue;
+}
+
 typedef struct AppHelloTriangle {
     GLFWwindow *window;
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
     VkPhysicalDevice physicalDevice;
+    VkDevice device;
+    VkQueue graphicsQueue;
 } AppHelloTriangle;
 
 bool checkValidationSupport() {
@@ -126,7 +137,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 
 void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT *createInfo) {
     (*createInfo).sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    (*createInfo).messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    (*createInfo).messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
     (*createInfo).messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     (*createInfo).pfnUserCallback = debugCallback;
     (*createInfo).pUserData = NULL;
@@ -225,8 +236,35 @@ void app_CreateVkInstance(AppHelloTriangle *app) {
     }
 }
 
+struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device) {
+    struct QueueFamilyIndicies indicies = {0};
+
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
+
+    VkQueueFamilyProperties queueFamilies[queueFamilyCount];
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies);
+
+    int j = 0;
+    for (uint32_t i = 0; i < queueFamilyCount; i++) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            indicies.graphicsFamily.value= j;
+            indicies.graphicsFamily.hasValue = true;
+        }
+
+        if (queueFamilyIndiciesIsComplete(indicies))
+            break;
+
+        j++;
+    }
+
+    return indicies;
+}
+
 bool isDeviceSuitable(VkPhysicalDevice device) {
-    return true;
+    struct QueueFamilyIndicies indicies = findQueueFamilies(device);
+
+    return queueFamilyIndiciesIsComplete(indicies);
 }
 
 void app_PickPhysicalDevide(AppHelloTriangle *app) {
@@ -253,11 +291,50 @@ void app_PickPhysicalDevide(AppHelloTriangle *app) {
     }
 }
 
+void app_CreateLogicalDevice(AppHelloTriangle *app) {
+    struct QueueFamilyIndicies indicies = findQueueFamilies(app->physicalDevice);
+
+    VkDeviceQueueCreateInfo queueCreateInfo = {0};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indicies.graphicsFamily.value;
+    queueCreateInfo.queueCount = 1;
+
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures = {0};
+
+    VkDeviceCreateInfo createInfo = {0};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+
+    createInfo.pEnabledFeatures = &deviceFeatures;
+
+    createInfo.enabledExtensionCount = 0;
+
+    if (enableValidationLayers) {
+            createInfo.enabledLayerCount = (uint32_t)VALIDATION_LAYERS_COUNT;
+            createInfo.ppEnabledLayerNames = validationLayers;
+    } else {
+        createInfo.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(app->physicalDevice, &createInfo, NULL, &app->device) != VK_SUCCESS) {
+        perror("failed to create logical device!");
+        exit(EXIT_FAILURE);
+    }
+
+    vkGetDeviceQueue(app->device, indicies.graphicsFamily.value, 0, &app->graphicsQueue);
+}
+
 void app_InitVulkan(AppHelloTriangle *app) {
     app_CreateVkInstance(app);
     app_SetupDebugMessenger(app);
     app_PickPhysicalDevide(app);
+    app_CreateLogicalDevice(app);
 }
+
 
 void app_MainLoop(AppHelloTriangle *app) {
     while(!glfwWindowShouldClose(app->window)) {
@@ -268,6 +345,10 @@ void app_MainLoop(AppHelloTriangle *app) {
 void app_Cleanup(AppHelloTriangle *app) {
     if (!app)
         return;
+    
+    if (app->device) {
+        vkDestroyDevice(app->device, NULL);
+    }
 
     if (app->instance) {
         if (enableValidationLayers) {
