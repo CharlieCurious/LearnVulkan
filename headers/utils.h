@@ -9,3 +9,5 @@ typedef struct OptionalUint32 {
     uint32_t value;
     bool hasValue;
 } OptionalUint32;
+
+uint32_t clamp(uint32_t value, uint32_t min, uint32_t max);

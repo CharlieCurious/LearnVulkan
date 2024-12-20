@@ -13,3 +13,5 @@ void app_SetupDebugMessenger(App *app);
 void app_CreateSurface(App *app);
 void app_PickPhysicalDevice(App *app);
 void app_CreateLogicalDevice(App *app);
+
+struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);

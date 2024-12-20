@@ -1,17 +1,19 @@
-#ifndef GLFW_INCLUDE_VULKAN
-    #define GLFW_INCLUDE_VULKAN
-#include <vulkan/vulkan_core.h>
-#endif
-#include <GLFW/glfw3.h>
-
+#include <swapchain.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <utils.h>
+#include <string.h>
 #include <validation_layers.h>
 #include <vk_instance.h>
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#define DEVICE_EXTENSION_COUNT 1
+const char *deviceExtensions[DEVICE_EXTENSION_COUNT] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
 static bool queueFamilyIndiciesIsComplete(struct QueueFamilyIndicies inicies);
-static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
+static bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 static bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
 static const char **getRequiredExtensions(uint32_t *extensionCount);
 
@@ -123,7 +125,8 @@ void app_CreateLogicalDevice(App *app) {
 
     createInfo.pEnabledFeatures = &deviceFeatures;
 
-    createInfo.enabledExtensionCount = 0;
+    createInfo.enabledExtensionCount = DEVICE_EXTENSION_COUNT;
+    createInfo.ppEnabledExtensionNames = deviceExtensions;
 
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = (uint32_t)VALIDATION_LAYERS_COUNT;
@@ -146,7 +149,7 @@ static bool queueFamilyIndiciesIsComplete(struct QueueFamilyIndicies indicies) {
     return indicies.graphicsFamily.hasValue && indicies.presentFamily.hasValue;
 }
 
-static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
+struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     struct QueueFamilyIndicies indicies = {0};
 
     uint32_t queueFamilyCount = 0;
@@ -176,10 +179,37 @@ static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkS
     return indicies;
 }
 
+static bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+    uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
+
+    VkExtensionProperties availableExtensions[extensionCount];
+    vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, availableExtensions);
+
+    uint32_t foundRequiredExtensionsCount = 0;
+    for (uint32_t i = 0; i < extensionCount; i++) {
+        for (uint32_t j = 0; j < DEVICE_EXTENSION_COUNT; j++) {
+            if (strcmp(availableExtensions[i].extensionName, deviceExtensions[j]) == 0) {
+                foundRequiredExtensionsCount++;
+            }
+        }
+    }
+
+    return foundRequiredExtensionsCount == DEVICE_EXTENSION_COUNT;
+}
+
 static bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
     struct QueueFamilyIndicies indicies = findQueueFamilies(device, surface);
 
-    return queueFamilyIndiciesIsComplete(indicies);
+    bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+    bool swapChainAdequate = false;
+    if (extensionsSupported) {
+        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device, surface, NULL, NULL);
+        swapChainAdequate = swapChainSupport.formats != NULL && swapChainSupport.presentModes != NULL;
+    }
+
+    return queueFamilyIndiciesIsComplete(indicies) && extensionsSupported && swapChainAdequate;
 }
 
 static const char **getRequiredExtensions(uint32_t *extensionCount) {

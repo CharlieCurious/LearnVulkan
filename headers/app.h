@@ -12,6 +12,10 @@ typedef struct App {
     VkDevice device;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
+    VkSwapchainKHR swapChain;
+    VkImage *swapChainImages;
+    VkFormat swapChainImageFormat;
+    VkExtent2D swapChainExtent;
 } App;
 
 typedef enum APP_Result {
@@ -22,5 +26,6 @@ typedef enum APP_Result {
 void app_Run(App *app, APP_Result *result);
 void app_InitWindow(App *app);
 void app_InitVulkan(App *app);
+void app_CreateSwapChain(App *app);
 void app_MainLoop(App *app);
 void app_Cleanup(App *app);
