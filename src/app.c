@@ -30,6 +30,7 @@ void app_InitWindow(App *app) {
 void app_InitVulkan(App *app) {
     app_CreateVkInstance(app);
     app_SetupDebugMessenger(app);
+    app_CreateSurface(app);
     app_PickPhysicalDevice(app);
     app_CreateLogicalDevice(app);
 }
@@ -51,6 +52,9 @@ void app_Cleanup(App *app) {
     if (app->instance) {
         if (enableValidationLayers) {
            vkDebugUtilsMessengerEXT_Destroy(app->instance, app->debugMessenger, NULL); 
+        }
+        if (app->surface) {
+            vkDestroySurfaceKHR(app->instance, app->surface, NULL);
         }
         vkDestroyInstance(app->instance, NULL);
     }

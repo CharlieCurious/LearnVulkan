@@ -1,12 +1,18 @@
+#ifndef GLFW_INCLUDE_VULKAN
+    #define GLFW_INCLUDE_VULKAN
+#include <vulkan/vulkan_core.h>
+#endif
+#include <GLFW/glfw3.h>
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <utils.h>
 #include <validation_layers.h>
 #include <vk_instance.h>
-#include <vulkan/vulkan_core.h>
 
 static bool queueFamilyIndiciesIsComplete(struct QueueFamilyIndicies inicies);
-static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device);
-static bool isDeviceSuitable(VkPhysicalDevice device);
+static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
+static bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
 static const char **getRequiredExtensions(uint32_t *extensionCount);
 
 void app_CreateVkInstance(App *app) {
@@ -41,8 +47,7 @@ void app_CreateVkInstance(App *app) {
     }
 
     if (vkCreateInstance(&createInfo, NULL, &app->instance) != VK_SUCCESS) {
-        perror("Failed to create VkInstance");
-        exit(EXIT_FAILURE);
+        THROW("Failed to create VkInstance");
     }
 }
 
@@ -53,8 +58,13 @@ void app_SetupDebugMessenger(App *app) {
     vkDebugMessengerCreateInfo_Populate(&createInfo);
 
     if (vkDebugUtilsMessengerEXT_Create(app->instance, &createInfo, NULL, &app->debugMessenger) != VK_SUCCESS) {
-        perror("Failed to create DebugUtilsMessengerEXT");
-        exit(EXIT_FAILURE);
+        THROW("Failed to create DebugUtilsMessengerEXT");
+    }
+}
+
+void app_CreateSurface(App *app) {
+    if (glfwCreateWindowSurface(app->instance, app->window, NULL, &app->surface) != VK_SUCCESS) {
+        THROW("Failed to create window surface");
     }
 }
 
@@ -62,44 +72,54 @@ void app_PickPhysicalDevice(App *app) {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(app->instance, &deviceCount, NULL);
     if (deviceCount == 0) {
-        perror("Failed to find GPUs with Vulkan support!");
-        exit(EXIT_FAILURE);
+        THROW("Failed to find GPUs with Vulkan support!");
     }
 
     VkPhysicalDevice devices[deviceCount];
     vkEnumeratePhysicalDevices(app->instance, &deviceCount, devices);
     
     for (uint32_t i = 0; i < deviceCount; i++) {
-        if (isDeviceSuitable(devices[i])) {
+        if (isDeviceSuitable(devices[i], app->surface)) {
             app->physicalDevice = devices[i];
             break;
         }
     }
     
     if (app->physicalDevice == VK_NULL_HANDLE) {
-        perror("Failed to find a suitable GPU");
-        exit(EXIT_FAILURE);
+        THROW("Failed to find a suitable GPU");
     }
 
 }
 
 void app_CreateLogicalDevice(App *app) {
-    struct QueueFamilyIndicies indicies = findQueueFamilies(app->physicalDevice);
+    struct QueueFamilyIndicies indicies = findQueueFamilies(app->physicalDevice, app->surface);
 
-    VkDeviceQueueCreateInfo queueCreateInfo = {0};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indicies.graphicsFamily.value;
-    queueCreateInfo.queueCount = 1;
+    const uint32_t uniqueQueueFamiliesCount = (indicies.graphicsFamily.value == indicies.presentFamily.value) ? 1 : 2;
+    uint32_t uniqueQueueFamilies[2] = {0};
+
+    uniqueQueueFamilies[0] = indicies.graphicsFamily.value;
+    if (uniqueQueueFamiliesCount == 2) {
+        uniqueQueueFamilies[1] = indicies.presentFamily.value;
+    }
+
+    VkDeviceQueueCreateInfo queueCreateInfos[uniqueQueueFamiliesCount];
 
     float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+    for (uint32_t i = 0; i < uniqueQueueFamiliesCount; i++) {
+        VkDeviceQueueCreateInfo queueCreateInfo = {0};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = uniqueQueueFamilies[i];
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfos[i] = queueCreateInfo;
+    }
 
     VkPhysicalDeviceFeatures deviceFeatures = {0};
 
     VkDeviceCreateInfo createInfo = {0};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pQueueCreateInfos = &queueCreateInfo;
-    createInfo.queueCreateInfoCount = 1;
+    createInfo.pQueueCreateInfos = queueCreateInfos;
+    createInfo.queueCreateInfoCount = uniqueQueueFamiliesCount;
 
     createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -113,20 +133,20 @@ void app_CreateLogicalDevice(App *app) {
     }
 
     if (vkCreateDevice(app->physicalDevice, &createInfo, NULL, &app->device) != VK_SUCCESS) {
-        perror("failed to create logical device!");
-        exit(EXIT_FAILURE);
+        THROW("failed to create logical device!");
     }
 
     vkGetDeviceQueue(app->device, indicies.graphicsFamily.value, 0, &app->graphicsQueue);
+    vkGetDeviceQueue(app->device, indicies.presentFamily.value, 0, &app->presentQueue);
 }
 
 // --------------------- Static Definitions ---------------------------------------------------------- //
 
 static bool queueFamilyIndiciesIsComplete(struct QueueFamilyIndicies indicies) {
-    return indicies.graphicsFamily.hasValue;
+    return indicies.graphicsFamily.hasValue && indicies.presentFamily.hasValue;
 }
 
-static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device) {
+static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     struct QueueFamilyIndicies indicies = {0};
 
     uint32_t queueFamilyCount = 0;
@@ -135,24 +155,29 @@ static struct QueueFamilyIndicies findQueueFamilies(VkPhysicalDevice device) {
     VkQueueFamilyProperties queueFamilies[queueFamilyCount];
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies);
 
-    int j = 0;
     for (uint32_t i = 0; i < queueFamilyCount; i++) {
         if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            indicies.graphicsFamily.value = j;
+            indicies.graphicsFamily.value = i;
             indicies.graphicsFamily.hasValue = true;
+        }
+
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+        if (presentSupport) {
+            indicies.presentFamily.value = i;
+            indicies.presentFamily.hasValue = true;
         }
 
         if (queueFamilyIndiciesIsComplete(indicies))
             break;
 
-        j++;
     }
 
     return indicies;
 }
 
-static bool isDeviceSuitable(VkPhysicalDevice device) {
-    struct QueueFamilyIndicies indicies = findQueueFamilies(device);
+static bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
+    struct QueueFamilyIndicies indicies = findQueueFamilies(device, surface);
 
     return queueFamilyIndiciesIsComplete(indicies);
 }
@@ -165,8 +190,7 @@ static const char **getRequiredExtensions(uint32_t *extensionCount) {
     *extensionCount = glfwExtensionCount;
     const char **extensions = (const char **)malloc(glfwExtensionCount * sizeof(const char *));
     if (!extensions) {
-        perror("malloc fail: getRequiredExtensions");
-        exit(EXIT_FAILURE);
+        THROW("malloc fail: getRequiredExtensions");
     }
 
     for (uint32_t i = 0; i < glfwExtensionCount; i++) {
@@ -176,9 +200,8 @@ static const char **getRequiredExtensions(uint32_t *extensionCount) {
     if (enableValidationLayers) {
         const char **new_extensions = (const char **)realloc(extensions, (glfwExtensionCount + 1) *sizeof(const char *));
         if (!new_extensions) {
-            perror("malloc fail: getRequiredExtensions");
             free(extensions);
-            exit(EXIT_FAILURE);
+            THROW("malloc fail: getRequiredExtensions");
         }
         extensions = new_extensions;
         extensions[glfwExtensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
