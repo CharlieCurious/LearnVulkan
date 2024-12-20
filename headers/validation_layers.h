@@ -7,7 +7,7 @@ extern const bool enableValidationLayers;
 
 #define VALIDATION_LAYERS_COUNT 1
 
-const char **validationLayers();
+const char **getValidationLayers();
 
 void vkDebugMessengerCreateInfo_Populate(VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo);
 

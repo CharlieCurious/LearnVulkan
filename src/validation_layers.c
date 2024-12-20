@@ -1,6 +1,5 @@
-#include "validation_layers.h"
-
 #include <stdio.h>
+#include <validation_layers.h>
 
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
@@ -21,7 +20,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
    return VK_FALSE; 
 }
 
-const char **validationLayers() {
+const char **getValidationLayers() {
     return valLayers;
 }
 

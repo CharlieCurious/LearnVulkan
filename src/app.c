@@ -1,6 +1,6 @@
-#include "app.h"
-#include "validation_layers.h"
-#include "vk_instance.h"
+#include <app.h>
+#include <validation_layers.h>
+#include <vk_instance.h>
 
 #include <stdint.h>
 
@@ -43,6 +43,10 @@ void app_MainLoop(App *app) {
 void app_Cleanup(App *app) {
     if (!app)
         return;
+
+    if (app->device) {
+        vkDestroyDevice(app->device, NULL);
+    }
 
     if (app->instance) {
         if (enableValidationLayers) {
