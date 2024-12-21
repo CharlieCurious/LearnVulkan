@@ -1,4 +1,5 @@
 #include <app.h>
+#include <shaders.h>
 #include <swapchain.h>
 #include <validation_layers.h>
 #include <vk_instance.h>
@@ -38,6 +39,8 @@ void app_InitVulkan(App *app) {
     app_PickPhysicalDevice(app);
     app_CreateLogicalDevice(app);
     app_CreateSwapChain(app);
+    app_CreateImageViews(app);
+    app_CreateGraphicsPipeline(app);
 }
 
 void app_CreateSwapChain(App *app) {
@@ -127,6 +130,32 @@ void app_CreateImageViews(App *app) {
             THROW("Failed to create image views!");
         }
     }
+}
+
+void app_CreateGraphicsPipeline(App *app) {
+    size_t vertShaderSize, fragShaderSize;
+    uint32_t *pVertShader = readShaderSource("shaders/bin/vert.spv", &vertShaderSize);
+    uint32_t *pFragShader = readShaderSource("shaders/bin/frag.spv", &fragShaderSize);
+
+    VkShaderModule vertShaderModule = createShaderModule(app->device, pVertShader, vertShaderSize);
+    VkShaderModule fragShaderModule = createShaderModule(app->device, pFragShader, fragShaderSize);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {0};
+    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {0};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[2] = { vertShaderStageInfo, fragShaderStageInfo };
+
+    vkDestroyShaderModule(app->device, vertShaderModule, NULL);
+    vkDestroyShaderModule(app->device, fragShaderModule, NULL);
 }
 
 void app_MainLoop(App *app) {

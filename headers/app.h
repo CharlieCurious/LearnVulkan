@@ -30,5 +30,6 @@ void app_InitWindow(App *app);
 void app_InitVulkan(App *app);
 void app_CreateSwapChain(App *app);
 void app_CreateImageViews(App *app);
+void app_CreateGraphicsPipeline(App *app);
 void app_MainLoop(App *app);
 void app_Cleanup(App *app);
