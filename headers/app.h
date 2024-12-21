@@ -18,6 +18,7 @@ typedef struct App {
     VkFormat swapChainImageFormat;
     VkExtent2D swapChainExtent;
     VkImageView *pSwapChainImageViews;
+    VkPipelineLayout pipelineLayout;
 } App;
 
 typedef enum APP_Result {
